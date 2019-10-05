@@ -1,0 +1,541 @@
+# ####################################################
+# DE2-COM2 Computing 2
+# Individual project
+#
+# Title: MAIN
+# Authors: Alison Luo
+# Last updated: 6th December 2018
+# ####################################################
+
+
+from copy import deepcopy  # copy 'target' to avoid modifying it
+import utils  # it might be helpful to use 'utils.py' 
+import matplotlib.pyplot as plt
+import matplotlib.patches as patches
+import operator
+import time
+
+def Tetris(target, limit_tetris):
+
+    def generate_shape1(shape_id):
+        """
+        Utility function called by generate_target
+        """#using tree to generate shape
+        shape = None
+        if shape_id <= 10:
+            if shape_id <= 5:
+                if shape_id <= 3:
+                    if shape_id == 1:
+                        shape = [[0, 0], [0, 1], [1, 0], [1, 1]]
+                    elif shape_id == 2:
+                        shape = [[0, 0], [1, 0], [2, 0], [3, 0]]
+                    else: #shape_id == 3:
+                        shape = [[0, 0], [0, 1], [0, 2], [0, 3]]
+                else:
+                    if shape_id == 4:
+                        shape = [[0, 0], [1, 0], [2, 0], [2, 1]]
+                    else: #shape_id == 5:
+                        shape = [[0, 0], [1, -2], [1, -1], [1, 0]]
+            else:
+                if shape_id <= 8: 
+                    if shape_id == 6:
+                        shape = [[0, 0], [0, 1], [1, 1], [2, 1]]
+                    elif shape_id == 7:
+                        shape = [[0, 0], [0, 1], [0, 2], [1, 0]]
+                    else: #shape_id == 8:
+                        shape = [[0, 0], [1, 0], [2, -1], [2, 0]]
+                else:
+                    if shape_id == 9:
+                        shape = [[0, 0], [0, 1], [0, 2], [1, 2]]
+                    else: #shape_id == 10:
+                        shape = [[0, 0], [0, 1], [1, 0], [2, 0]]
+        else:
+            if shape_id <= 15:
+                if shape_id <= 13:
+                    if shape_id == 11:
+                        shape = [[0, 0], [1, 0], [1, 1], [1, 2]]
+                    elif shape_id == 12:
+                        shape = [[0, 0], [1, 0], [1, 1], [2, 0]]
+                    else: #shape_id == 13:
+                        shape = [[0, 0], [1, -1], [1, 0], [1, 1]]
+                else:
+                    if shape_id == 14:
+                        shape = [[0, 0], [1, -1], [1, 0], [2, 0]]
+                    else: #shape_id == 15:
+                        shape = [[0, 0], [0, 1], [0, 2], [1, 1]]
+            else: 
+                if shape_id <= 17:
+                    if shape_id == 16:
+                        shape = [[0, 0], [0, 1], [1, -1], [1, 0]]
+                    else: #shape_id == 17:
+                        shape = [[0, 0], [1, 0], [1, 1], [2, 1]]
+                else:
+                    if shape_id == 18:
+                        shape = [[0, 0], [0, 1], [1, 1], [1, 2]]
+                    else: #shape_id == 19:
+                        shape = [[0, 0], [1, -1], [1, 0], [2, -1]]
+        return shape
+
+    def findingmaxmin(target,width,height,blackbig,whitebig,edges,widthl,heightl):
+        #finding initial edges to find instances
+        edge_count=0
+        for v in blackbig: #looping through the 0's on the target matrix
+            if edge_count>40: #limiting edges generated to 40 to limit each round of instances
+                break
+            else:
+                x=v[0]
+                y=v[1]
+                for x1 in range(x-1,x+2): #finding neighbours of 0's
+                    for y1 in range(y-1,y+2):
+                        if (x1,y1)!=(x,y) and x1>=heightl and x1<height and y1>=widthl and y1<width:
+                            edges.add((x1,y1))
+                            edge_count+=1 
+        for i in whitebig: #finding edges that are on the border of the target
+            if i[0]==heightl or i[0]==height-1 or i[1]==widthl or i[1]==width-1:
+                edges.add(i)
+        for x in tuple(list(range(widthl,width))):#finding the block closest to top left
+            for y in tuple(list(range(heightl,height))):
+                if target[y][x]==1:
+                    smallest=tuple((x,y))
+                    edges.add(smallest)
+                    break
+            else:
+                continue
+            break
+    
+        edges=edges.difference(blackbig)
+        return edges
+    
+    def find_instances(blackbig,whitebig,edges,height,width,shapedic,shaporder,widthl,heightl):
+        #finding instances within the 'edges' blocks generated
+        place=set()
+        instance=set()
+        
+        for block in edges:
+            
+            for shape,value in shapedic.items(): #shapedic=limi_tetris
+                if value!=0:
+                    place=set()
+                    shapetemp=generate_shape1(shape)
+                    shapetemp=tuple([tuple(i)for i in shapetemp])
+                    for x in shapetemp: #tests every shape in limit_tetris in the edges
+                        
+                        test=tuple(map(operator.add, x, block))
+                        if (test[0]>=heightl) and (test[0]<height) and (test[1]>=widthl) and (test[1]<width):# checking instances are in boundary
+                            place.add(test)
+                        else:
+                            place.clear()
+                            break
+                    place=place.difference(blackbig)
+                    if len(place)==4: #if all 4 blocks in the instance are not in black and are within boundary
+                        place=tuple(place)
+                        instance.add(place)
+                        shaporder[place]=shape
+        return instance,shaporder 
+    
+    
+    
+    def get_totest(blackbig, width,height,k,widthl,heightl):
+        #finds all white blocks (1 on the target) surrounding each instance
+        #these blocks will be used to find errors
+        totest=set()
+        
+        transform={(-1,0),(1,0),(0,-1),(0,1)}#neighbour algorithm, finds adjacent coords
+        for h in k:
+            for ex in transform:
+                nei=tuple(map(operator.add, h, ex))
+                if (nei[0]>=heightl) and (nei[0]<height) and (nei[1]>=widthl) and (nei[1]<width):#boundary conditions
+                    totest.add(nei)
+            totest=totest.difference(blackbig,k) 
+        
+        return totest
+    
+    def branch_length(totest,blackbig,height,width,k,widthl,heightl):
+        #finds errors through BFS
+        error=0
+        branch=set()
+        visited=set()
+        error=set()
+        for t in totest:#tests every surrounding block of each instance
+            firstround=True
+            treefin=False
+            branch.clear()
+            visited.clear()
+            x=t[0]
+            y=t[1]
+            while treefin==False: #while each totest branch has not been completed
+                if firstround==True:#first round generates first round of depth for each node
+                    
+                    transform={(-1,0),(1,0),(0,-1),(0,1)} #neighbour algorithm
+                    for ex in transform:
+                        test=tuple(map(operator.add, t, ex))
+                        if (test[0]>=heightl) and (test[0]<height) and (test[1]>=widthl) and (test[1]<width):
+                            branch.add(test)
+                            visited.add(test)
+                    branch=branch.difference(blackbig,k) 
+                    visited=visited.difference(blackbig,k)
+                    if len(branch)==0: #if next depth level=0
+                        error.add((x,y)) #the instance has blocked one square off
+                        treefin=True
+                    elif len(branch)>=3: #if next depth level is 3 or more it is not blocking off any squares
+                        treefin=True
+                    firstround=False
+                else: #for depth levels after the first 
+                    if branch:
+                        netotest=branch.pop()
+                        transform={(-1,0),(1,0),(0,-1),(0,1)} #neighbour algorithm
+                        for ex in transform:
+                            test=tuple(map(operator.add, netotest, ex))
+                            if (test[0]>=heightl) and (test[0]<height) and (test[1]>=widthl) and (test[1]<width)and test not in visited:
+                                branch.add(test)
+                                visited.add(test)
+                            
+                        set_oft=set()
+                        set_oft.add(t) #set that stores the totest as a set for later comparison
+                        branch=branch.difference(blackbig,k,set_oft) 
+                        visited=visited.difference(blackbig,k,set_oft)
+                        if len(visited)>=3: #if total adjacency is more than 4 (one already from the first round)
+                            treefin=True
+                    else:               #else there is no more to pop in netotest 
+                        error.add((x,y))
+                        error=error|visited
+                        
+                        treefin=True
+    
+        return error #,shape_covered
+    
+    def score(shaperror,shapescore,height,width,blackbig,widthl,heightl):
+        #getting the score for each instance 
+        #score is how many neighbours that are next to boundary or next to black block
+        for toscore,val in shaperror.items():
+            score=0
+            for indivsc in toscore:
+                transform={(-1,0),(1,0),(0,-1),(0,1)} #neighbour algorithm 
+                for ex in transform:
+                    tests=tuple(map(operator.add, indivsc, ex))
+                    
+                    if (tests in blackbig) or (tests[0]<heightl) or (tests[0]>=height) or (tests[1]<widthl) or (tests[1]>=width):
+                        score+=1
+            shapescore[toscore]=score
+        return shapescore
+    
+    def findedges(blackbig,edges,oddblock,justplaced,width,height,widthl,heightl):
+        #finds the next set of edges after a round of instances have been placed
+        edge_count=0
+        for v in justplaced:
+            if edge_count>20:#limits the edges to test next to 20
+                break
+            else:
+                x=v[0]
+                y=v[1]
+                for x1 in range(x-2,x+3): #neighbour algorithm
+                    for y1 in range(y-1,y+3):
+                        if (x1,y1)!=(x,y) and x1>=heightl and x1<height and y1>=widthl and y1<width:
+                            edges.add((x1,y1))
+                            edge_count+=1
+        edges=edges.difference(oddblock,blackbig)
+        return edges
+    
+    
+    def extra_edges(whitebig,edges,finished):
+        #for finding extra edges if no instances are found in current set of edges
+        if len(whitebig)!=0:
+            status=1
+            edges.add(whitebig.pop())
+            return edges, status, finished
+        else:
+            status=0
+            finished=True #if there are no edges left to test
+            return edges,status, finished
+        
+        
+    def placing_piece(place_instance,shaporder,piece_no,M,justplaced,placed,shapedic,edges,blackbig,whitebig,oddblock):
+        #places the piece and updates M, sets that store what has been placed
+        for (x, y) in place_instance:
+            M[x][y] = (shaporder[tuple(place_instance)],piece_no+1)
+        piece_no+=1
+        justplaced=justplaced|(set(place_instance))
+        placed=placed|(justplaced)
+        
+        blackbig=blackbig|(set(place_instance))
+        whitebig=whitebig.difference(set(place_instance))
+        shapedic[shaporder[tuple(place_instance)]]+=-1 #decreases limit_tetris dictionary
+        edges=edges.difference(set(place_instance))
+        oddblock=oddblock.difference(set(place_instance)) 
+    
+    
+        
+        return piece_no,M,justplaced,placed,shapedic,edges,blackbig,whitebig,oddblock
+    
+    def initial_setup(target,limit_tetris):
+        #runs once at the beginning of all the code
+        
+        width=len(target[0])
+        height=len(target)
+
+        piece_no=0
+        M=[[(0,0) for col in range(0, width)] for row in range(0, height)]
+        
+        black=[] #creates set of black (0's in target)
+        for x in range(width):
+            for y in range(height):
+                if target[y][x]!=1:
+                    black.append([y,x])
+                    
+        black_set=set([tuple(i)for i in black])
+        
+        white=[] #creates set of white(1's in target)
+        for x in range(width):
+            for y in range(height):
+                if target[y][x]==1:
+                    white.append([y,x])
+        white_set=set([tuple(i)for i in white])
+        
+        shapedic=limit_tetris.copy()
+    
+        return piece_no,black_set,white_set,M,width,height,shapedic
+    
+    def find_instancesthree(blackbig,whitebig,edges,height,width,shapedic,shaporder,widthl,heightl,oddblock,piece_no,M,placed,blackcopy):
+        #finding the instances in the blocks that could not place anything at the end
+        if len(oddblock)>0:
+            oddbobcopy=oddblock.copy()
+            for odd in oddbobcopy:
+                if len(oddblock)==0:
+                    break #(finish the extra places)
+                place=set()
+                instance=set()
+                
+            
+                for shape,value in shapedic.items():
+                    if value!=0:
+                        place=set()
+                        shapetemp=generate_shape1(shape)
+                        shapetemp=tuple([tuple(i)for i in shapetemp])
+                        for x in shapetemp:
+                            
+                            test=tuple(map(operator.add, x, odd))
+                            if (test[0]>=heightl) and (test[0]<height) and (test[1]>=widthl) and (test[1]<width)and M[test[0]][test[1]]==(0,0):
+                                place.add(test)
+                            else:
+                                place.clear()
+                                break
+                        testthree=place.difference(blackcopy)
+                        if len(testthree)==3:#if three of the blocks are in empty spaces and 1 block is in the 0s
+                            place=tuple(place)
+                            instance.add(place)
+                            place_instance=place
+                            justplaced=set(place_instance)
+                            shaporder[place]=shape
+                            piece_no,M,justplaced,placed,shapedic,edges,blackbig,whitebig,oddblock=placing_piece(place_instance,shaporder,piece_no,M,justplaced,placed,shapedic,edges,blackbig,whitebig,oddblock)
+                            oddblock=oddblock.difference(justplaced)
+        return piece_no,M,placed,shapedic,edges,blackbig,whitebig,oddblock,shaporder
+    
+    
+    def solving(target,limit_tetris):
+        #main frame of algorithm
+        start = time.time()
+        period=580
+        piece_no,black_set,white_set,M,width,height,shapedic=initial_setup(target,limit_tetris)
+    
+        bigblocks={}
+        if height*width>90000: #if the grid area is more than 300 x 300
+            x_number=height//50 #dividing the large grid into 50 by 50 grids
+            if x_number==0:
+                x_number=1
+            y_number=width//50
+            if y_number==0:
+                y_number=1
+            x_remainder=height%50
+            y_remainder=width%50 #finding the remainders and adding th remainders onto the bottom and right boundaries
+            for x in range(x_number):
+                for y in range(y_number):#creating dictionary of all the 50x50 blocks {(bottom left corner of each bigblock:dimensions of bigblock)}
+                    if x==x_number-1 or y==y_number-1:
+                        if x==x_number-1 and y==y_number-1:
+                            bigblocks[(x*50,y*50)]=tuple((50+x_remainder,50+y_remainder))
+                        elif x==x_number-1:
+                            bigblocks[(x*50,y*50)]=tuple((50+x_remainder,53))
+                        elif y==y_number-1:
+                            bigblocks[(x*50,y*50)]=tuple((53,50+y_remainder))
+                    else:
+                        bigblocks[(x*50,y*50)]=tuple((53,53))
+            blackbig=set()
+            whitebig=set()
+        else:
+            bigblocks[1]=1     #for grid sizes less than 300 x 300       
+    
+        for place,length in bigblocks.items(): #iterates through each block 
+            if time.time()>start+period:
+                break
+            if len(bigblocks)>1:
+                black_set.update(blackbig)
+                white_set.difference(blackbig)
+                blackbig=set()
+                whitebig=set()
+                #splitting the black and white set foe big blocks 
+                blackbig.update((x,y) for(x,y) in black_set if (x<place[0]+length[0]) and (x>=place[0]) and (y<place[1]+length[1]) and (y>=place[1]))
+                whitebig.update((x,y) for(x,y) in white_set if (x<place[0]+length[0]) and (x>=place[0]) and (y<place[1]+length[1]) and (y>=place[1]))
+                
+                width= place[1]+length[1] #setting width and height of each bigblock
+                widthl= place[1]
+                height= place[0]+length[0]
+                heightl= place[0]
+                blackcopy=blackbig
+            else:
+                widthl= 0
+                heightl= 0
+                blackbig=black_set
+                blackcopy=blackbig
+                whitebig=white_set
+            
+            oddblock=set()
+            edges=set()
+            edges=findingmaxmin(target,width,height,blackbig,whitebig,edges,widthl,heightl)
+            placed=set()
+            leftover={}
+            shaporder={}
+            finished=False
+        
+            while finished==False:#while each 50 x 50 or 300x300 and less are not done
+                if time.time()>start+period:
+                    break
+                instance,shaporder=find_instances(blackbig,whitebig,edges,height,width,shapedic,shaporder,widthl,heightl)
+                
+                if len(instance)==0:#if no instances are found for current set of edges
+                    
+                    oddblock=oddblock|edges
+                    edges.clear()
+                    edges,status,finished=extra_edges(whitebig,edges,finished)
+                    if finished==True:
+                        break
+                    elif status==1:
+                        continue
+                place_instance=None
+                shaperror={}
+                shapescore={}
+                
+                for k in instance: #finding the neighbours for each instance
+                    totest=get_totest(blackbig, width,height,k,widthl,heightl)
+                    if len(totest)==0:
+                        pass
+                    error=branch_length(totest,blackbig,height,width,k,widthl,heightl)
+                    shaperror[k]=len(error)
+                
+                if place_instance==None:
+                    removal=set()
+                    
+                    for instxnce,errorlen in shaperror.items():
+                        if errorlen!=0:
+                            leftover[instxnce]=errorlen         #adding non zero erros to leftover
+                                                           #deleting leftover from shaperrors (0s)
+                            removal.add(instxnce)
+                    if len(removal)==len(shaperror): #if all numbered errors= length of shaperror (all have errors)
+                        place_instance=min(shaperror, key=shaperror.get) 
+                    else:
+                        for rem in removal:
+                            del shaperror[rem]
+                        shapescore=score(shaperror,shapescore,height,width,blackbig,widthl,heightl)
+                        place_instance=max(shapescore, key=shapescore.get)
+                        
+                        
+                justplaced=set(place_instance)
+                placed=placed|(justplaced)   #single coordinates of placed
+                    
+                blackbig=blackbig|justplaced
+                whitebig=whitebig.difference(justplaced)  #place extra ones with this code
+                for (x, y) in place_instance: #placing the initial optimal piece
+                    M[x][y] = (shaporder[tuple(place_instance)],piece_no+1)
+                piece_no+=1
+                
+                edges=edges.difference(justplaced)
+                shapedic[shaporder[tuple(place_instance)]]+=-1
+                oddblock=oddblock.difference(justplaced)
+        
+                scorecopy=shapescore.copy()
+                
+                for point,value in scorecopy.items(): #this for loop is for the same set of edges but finds other optimal place instances
+                    if place_instance!=None:
+                        for key in scorecopy:
+                            if any (x in place_instance for x in key) and (key in shapescore):
+                                del shapescore[key]
+                    
+                    if len(shapescore)==0:
+                        break #(finish the extra places)
+                    else:
+                        place_instance=max(shapescore, key=shapescore.get) 
+                        totest=get_totest(blackbig, width,height,k,widthl,heightl)
+                        if len(totest)==0:
+                            if shapedic[shaporder[tuple(place_instance)]]>0:
+                                piece_no,M,justplaced,placed,shapedic,edges,blackbig,whitebig,oddblock=placing_piece(place_instance,shaporder,piece_no,M,justplaced,placed,shapedic,edges,blackbig,whitebig,oddblock)
+                                del shapescore[place_instance]
+                                continue #placing this extra one
+                            else:
+                                del shapescore[place_instance]
+                                place_instance=None                                
+                                continue
+                        else:
+                            error=branch_length(totest,blackbig,height,width,k,widthl,heightl)
+                            if len(error)>0:
+                                leftover[place_instance]=len(error)
+                                del shapescore[place_instance]
+                                place_instance=None
+                                continue  #move onto next shapescore
+                            elif len(error)==0:
+                                if shapedic[shaporder[tuple(place_instance)]]>0:
+                                    piece_no,M,justplaced,placed,shapedic,edges,blackbig,whitebig,oddblock=placing_piece(place_instance,shaporder,piece_no,M,justplaced,placed,shapedic,edges,blackbig,whitebig,oddblock)
+                                    del shapescore[place_instance]
+                                    continue
+                                else:
+                                    del shapescore[place_instance]
+                                    place_instance=None                                   
+                                    continue
+                
+                oddblock=oddblock|edges
+                edges.clear()
+    
+                edges=findedges(blackbig,edges,oddblock,justplaced,width,height,widthl,heightl)
+                #finding extra edges to test for the next round
+                edges=findedges(blackbig,edges,oddblock,oddblock,width,height,widthl,heightl)
+    
+                
+                if len(edges)==0:
+                    edges,status,finished=extra_edges(whitebig,edges,finished)
+                    if finished==True:
+                        break
+    
+            #finds if any shapes can fit into the leftover empty spaces after all edges have been tested
+            if len(leftover)>0:
+                leftovercopy=leftover.copy()
+                for keys in leftovercopy:
+                    if any (x in placed for x in keys) and (keys in leftover):
+                        del leftover[keys]
+            place_instance=None
+            if len(leftover)>0:
+                leftovercopy=leftover.copy()
+                for piecel in leftovercopy:
+                    if place_instance!=None:
+                        for keys in leftovercopy:
+                            if any (x in place_instance for x in keys) and (keys in leftover):
+                                del leftover[keys]
+                    if len(leftover)==0:
+                        break #(finish the extra places)
+                    place_instance=min(leftover, key=leftover.get) 
+                    if shapedic[shaporder[tuple(place_instance)]]>0:
+
+                        piece_no,M,justplaced,placed,shapedic,edges,blackbig,whitebig,oddblock=placing_piece(place_instance,shaporder,piece_no,M,justplaced,placed,shapedic,edges,blackbig,whitebig,oddblock)
+                        del leftover[place_instance]
+                        continue
+                    else:
+                        del leftover[place_instance]
+                        place_instance=None                        
+                        continue
+
+            if len(bigblocks)<=256:        #196 #if the number of bigblocks are less than 256, place instances that create excess blocks
+
+                piece_no,M,placed,shapedic,edges,blackbig,whitebig,oddblock,shaporder=find_instancesthree(blackbig,whitebig,edges,height,width,shapedic,shaporder,widthl,heightl,oddblock,piece_no,M,placed,blackcopy)
+                    
+
+            
+        return M
+    M=solving(target,limit_tetris)
+    #print('done')
+    return M
